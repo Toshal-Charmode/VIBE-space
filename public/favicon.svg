@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <!-- Background Radial Glow -->
+    <radialGradient id="vibeCoreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#C084FC" stop-opacity="0.8" />
+      <stop offset="40%" stop-color="#9333EA" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#4F46E5" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Electric Neon Gradient -->
+    <linearGradient id="neonVibeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F0ABFC" />
+      <stop offset="35%" stop-color="#C084FC" />
+      <stop offset="70%" stop-color="#9333EA" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+
+    <!-- Orbital Ring Gradient -->
+    <linearGradient id="orbitalGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#E879F9" stop-opacity="0.9" />
+      <stop offset="50%" stop-color="#A855F7" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0.9" />
+    </linearGradient>
+
+    <!-- Dark Obsidian Glass Gradient -->
+    <linearGradient id="glassSphereGrad" x1="20%" y1="20%" x2="80%" y2="80%">
+      <stop offset="0%" stop-color="rgba(192, 132, 252, 0.4)" />
+      <stop offset="50%" stop-color="rgba(30, 24, 52, 0.85)" />
+      <stop offset="100%" stop-color="rgba(10, 9, 18, 0.95)" />
+    </linearGradient>
+
+    <!-- Soft Filter Glow -->
+    <filter id="vibeGlowFilter" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ambient Glow Behind Logo -->
+  <circle cx="60" cy="60" r="46" fill="url(#vibeCoreGlow)" opacity="0.65" />
+
+  <!-- Orbital Energy Ring Back -->
+  <ellipse cx="60" cy="62" rx="48" ry="16" transform="rotate(-26 60 62)" fill="none" stroke="url(#orbitalGrad)" stroke-width="2.5" opacity="0.5" stroke-dasharray="6 3" />
+
+  <!-- Central Glass Sphere -->
+  <circle cx="60" cy="58" r="26" fill="url(#glassSphereGrad)" stroke="rgba(192, 132, 252, 0.45)" stroke-width="1.5" />
+  <!-- Sphere Highlight -->
+  <ellipse cx="52" cy="48" rx="8" ry="5" fill="#FFFFFF" opacity="0.25" transform="rotate(-30 52 48)" />
+
+  <!-- Stylized Geometric "V" Wings with Neon Purple Gradient -->
+  <path d="M 28 32 L 60 88 L 92 32 L 80 32 L 60 74 L 40 32 Z" fill="url(#neonVibeGrad)" filter="url(#vibeGlowFilter)" />
+
+  <!-- Inner Vertex Nexus Orb -->
+  <circle cx="60" cy="74" r="5" fill="#F0ABFC" filter="url(#vibeGlowFilter)" />
+
+  <!-- Orbital Energy Ring Front (overlapping) -->
+  <path d="M 16 66 A 48 16 0 0 0 102 52" transform="rotate(-26 60 62)" fill="none" stroke="url(#orbitalGrad)" stroke-width="3" filter="url(#vibeGlowFilter)" />
+</svg>

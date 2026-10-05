@@ -1,0 +1,270 @@
+@import './variables.css';
+@import './glass.css';
+
+/* Global Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background-color: var(--bg-main); /* #18191C */
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* App Shell Structure */
+.app-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: var(--bg-main); /* #18191C */
+  position: relative;
+}
+
+.main-content-layout {
+  flex: 1;
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-primary); /* #1B1C20 */
+  position: relative;
+  z-index: 2;
+}
+
+/* Chat & Stream Area */
+.chat-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 20px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 2;
+  background-color: var(--bg-primary); /* #1B1C20 */
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #121316;
+  border-radius: var(--radius-full);
+  transition: background-color var(--anim-fast) var(--ease-out);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #0A0B0D;
+}
+
+/* Natural Message Feed Styling */
+.message-group {
+  display: flex;
+  gap: 16px;
+  padding: 4px 16px;
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--anim-fast) var(--ease-out);
+  position: relative;
+}
+
+.message-group:hover {
+  background-color: var(--bg-card); /* #24262B */
+}
+
+.message-group:hover .message-hover-actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.message-hover-actions {
+  position: absolute;
+  top: -16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-card); /* #24262B */
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--anim-fast) var(--ease-out),
+              transform var(--anim-fast) var(--ease-out);
+  z-index: 20;
+}
+
+.message-action-btn {
+  padding: 5px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  background: none;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--anim-fast) var(--ease-out),
+              background-color var(--anim-fast) var(--ease-out),
+              transform var(--anim-fast) var(--ease-out);
+}
+
+.message-action-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+  transform: scale(1.1);
+}
+
+.message-action-btn:active {
+  transform: scale(0.95);
+}
+
+/* Leftmost Space Bar Icons */
+.space-icon-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--bg-card); /* #24262B */
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: border-radius var(--anim-normal) var(--ease-spring),
+              background-color var(--anim-normal) var(--ease-out),
+              color var(--anim-normal) var(--ease-out),
+              transform var(--anim-fast) var(--ease-out),
+              box-shadow var(--anim-fast) var(--ease-out),
+              border-color var(--anim-fast) var(--ease-out);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.space-icon-btn:hover {
+  border-radius: 14px;
+  background-color: var(--accent-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  transform: scale(1.05) translateY(-1px);
+  box-shadow: 0 6px 16px rgba(88, 101, 242, 0.4);
+}
+
+.space-icon-btn:active {
+  border-radius: 14px;
+  transform: scale(0.97) translateY(1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.space-icon-btn.active {
+  border-radius: 14px;
+  background-color: var(--accent-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+}
+
+/* Space icon left pill indicator */
+.space-pill-indicator {
+  position: absolute;
+  left: 0;
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background-color: #FFFFFF;
+  transition: height var(--anim-normal) var(--ease-spring),
+              opacity var(--anim-fast) var(--ease-out);
+}
+
+/* Subtle Ambient Orb Movement (16-18 seconds, barely noticeable atmosphere) */
+@keyframes ambientDrift1 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(35px, -20px) scale(1.06); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+@keyframes ambientDrift2 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(-25px, 30px) scale(0.96); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+.ambient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ambient-orb-1 {
+  width: 420px;
+  height: 420px;
+  background: var(--accent-primary);
+  top: 8%;
+  left: 15%;
+  animation: ambientDrift1 16s infinite ease-in-out;
+}
+
+.ambient-orb-2 {
+  width: 360px;
+  height: 360px;
+  background: var(--accent-vibe);
+  bottom: 12%;
+  right: 20%;
+  animation: ambientDrift2 18s infinite ease-in-out;
+}
+
+/* Badge count scale bounce animation */
+@keyframes badgePop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.badge-pop {
+  animation: badgePop var(--anim-fast) var(--ease-spring) forwards;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1024px) {
+  .hide-on-tablet {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+  .ambient-orb {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .hide-on-desktop {
+    display: none !important;
+  }
+}

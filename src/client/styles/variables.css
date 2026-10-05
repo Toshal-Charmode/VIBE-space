@@ -1,0 +1,74 @@
+/* VIBE SPACE Design Tokens - Rich Charcoal-Black Communication Foundation */
+:root {
+  /* =========================================================
+     1. Rich Charcoal-Black Communication Palette
+     ========================================================= */
+  --bg-main: #18191C;             /* Main app backdrop */
+  --bg-primary: #1B1C20;          /* Main chat area & central stage */
+  --bg-secondary: #202124;        /* Primary charcoal: channel sidebar & panels */
+  --bg-tertiary: #151619;         /* Leftmost space rail & popover backdrop */
+  --bg-floating: #232428;         /* Secondary charcoal: modals, dropdowns, menus */
+  --bg-card: #24262B;             /* Cards, embedded elements, tiles */
+  --bg-card-hover: #2B2D33;       /* Card hover state */
+  --bg-hover: #30323A;            /* Button, channel & list item hover */
+  --bg-active: #4752C4;           /* Active channel indicator & selected state */
+  --bg-input: #24262B;            /* Input fields & message composer */
+  --bg-modifier-selected: rgba(255, 255, 255, 0.08);
+
+  /* =========================================================
+     2. Accents & Vibe Space Highlights
+     ========================================================= */
+  --accent-primary: #5865F2;      /* Primary blurple */
+  --accent-primary-hover: #4752C4;
+  --accent-secondary: #7289DA;    /* Secondary accent */
+  --accent-vibe: #8B5CF6;         /* Signature Vibe Space violet */
+  --accent-vibe-hover: #7C3AED;
+  --accent-glow: rgba(88, 101, 242, 0.25);
+  --accent-purple-glow: rgba(139, 92, 246, 0.2);
+
+  /* Status Colors */
+  --status-online: #23A559;       /* Discord success green */
+  --status-idle: #F0B232;         /* Warning / idle yellow */
+  --status-dnd: #F23F42;          /* Danger / DND red */
+  --status-offline: #80848E;      /* Offline gray */
+
+  /* Text Hierarchy */
+  --text-primary: #F2F3F5;        /* High-contrast headings and active text */
+  --text-secondary: #B5BAC1;      /* Channel names, body messages */
+  --text-muted: #949BA4;          /* Timestamps, categories, secondary info */
+  --text-link: #00A8FC;           /* Hyperlinks */
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.09);
+  --border-highlight: rgba(255, 255, 255, 0.14);
+  --border-focus: #5865F2;
+
+  /* Typography & Radii */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, monospace;
+
+  /* Moderate Corner Radii (8px - 10px as requested) */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 9999px;
+
+  /* =========================================================
+     3. Global Animation System & Timing Tokens
+     ========================================================= */
+  --anim-fast: 140ms;             /* 120–160ms: micro-interactions, toggles */
+  --anim-normal: 240ms;           /* 200–300ms: channel switches, message entrance */
+  --anim-smooth: 350ms;           /* 300–450ms: modals, expand/collapse */
+  --anim-ambient: 16s;            /* 10–20s: slow atmospheric ambient light drift */
+
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Legacy aliases for backwards compatibility */
+  --trans-fast: var(--anim-fast) var(--ease-out);
+  --trans-smooth: var(--anim-normal) var(--ease-out);
+  --trans-bounce: var(--anim-smooth) var(--ease-spring);
+}

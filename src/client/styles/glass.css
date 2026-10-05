@@ -1,0 +1,552 @@
+/* Vibe Space Component Styles - Rich Charcoal-Black Communication Design */
+
+/* Modern Solid Charcoal Panels with clean depth */
+.panel-tertiary {
+  background-color: var(--bg-tertiary); /* #151619 */
+  border-right: 1px solid var(--border-subtle);
+}
+
+.panel-secondary {
+  background-color: var(--bg-secondary); /* #202124 */
+  border-right: 1px solid var(--border-subtle);
+}
+
+.panel-primary {
+  background-color: var(--bg-primary); /* #1B1C20 */
+}
+
+/* Modals & Overlays */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(10, 11, 14, 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: backdropFadeIn var(--anim-fast) var(--ease-out) forwards;
+}
+
+.glass-modal {
+  background-color: var(--bg-floating); /* #232428 */
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md); /* 10px */
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.4);
+  animation: modalEntrance var(--anim-normal) var(--ease-out) forwards;
+  overflow: hidden;
+  transform-origin: center center;
+}
+
+.glass-popover {
+  background-color: var(--bg-floating); /* #232428 */
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm); /* 8px */
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 500;
+  animation: popoverEntrance var(--anim-fast) var(--ease-out) forwards;
+}
+
+/* =========================================================
+   Refined Navigation Controls (Friends / Suggestions / Messages)
+   ========================================================= */
+.nav-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm); /* 8px-10px */
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 500;
+  user-select: none;
+  position: relative;
+  text-decoration: none;
+  transition: background-color var(--anim-fast) var(--ease-out),
+              color var(--anim-fast) var(--ease-out),
+              transform var(--anim-fast) var(--ease-out),
+              box-shadow var(--anim-fast) var(--ease-out),
+              border-color var(--anim-fast) var(--ease-out);
+}
+
+.nav-pill-btn svg {
+  color: var(--text-muted);
+  transition: transform var(--anim-fast) var(--ease-spring),
+              color var(--anim-fast) var(--ease-out);
+}
+
+.nav-pill-btn:hover {
+  background-color: var(--bg-hover); /* #30323A */
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.nav-pill-btn:hover svg {
+  color: var(--text-primary);
+}
+
+.nav-pill-btn:active {
+  transform: scale(0.975) translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Contextual Icon Movements */
+.nav-pill-btn-friends:hover svg {
+  transform: translateX(2px);
+  color: var(--accent-secondary);
+}
+
+.nav-pill-btn-suggestions:hover svg {
+  transform: rotate(15deg) scale(1.1);
+  color: var(--status-idle);
+}
+
+.nav-pill-btn-messages:hover svg {
+  transform: translateY(-2px);
+  color: var(--accent-primary);
+}
+
+.nav-pill-btn-discover:hover svg {
+  transform: rotate(20deg) scale(1.08);
+  color: var(--accent-vibe);
+}
+
+.nav-pill-btn.active {
+  background-color: var(--bg-card-hover); /* #2B2D33 */
+  color: #FFFFFF !important;
+  font-weight: 600;
+  border-color: var(--border-medium);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.nav-pill-btn.active svg {
+  color: var(--accent-primary) !important;
+}
+
+/* Thin active indicator line */
+.nav-pill-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background-color: var(--accent-primary);
+}
+
+/* =========================================================
+   Micro 3D Tactile Buttons
+   ========================================================= */
+.btn-primary {
+  background-color: var(--accent-primary);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm); /* 8px-10px */
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  transition: transform var(--anim-fast) var(--ease-out),
+              background-color var(--anim-fast) var(--ease-out),
+              box-shadow var(--anim-fast) var(--ease-out);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(88, 101, 242, 0.38);
+}
+
+.btn-primary:active {
+  transform: scale(0.98) translateY(1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 2px;
+}
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background-color: var(--bg-card); /* #24262B */
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); /* 8px-10px */
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: relative;
+  transition: transform var(--anim-fast) var(--ease-out),
+              background-color var(--anim-fast) var(--ease-out),
+              color var(--anim-fast) var(--ease-out),
+              box-shadow var(--anim-fast) var(--ease-out),
+              border-color var(--anim-fast) var(--ease-out);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-hover); /* #30323A */
+  border-color: var(--border-medium);
+  color: #FFFFFF;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.35);
+}
+
+.btn-secondary:active {
+  transform: scale(0.98) translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--accent-secondary);
+  outline-offset: 2px;
+}
+
+.btn-danger {
+  background-color: var(--status-dnd);
+  color: #FFFFFF;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform var(--anim-fast) var(--ease-out),
+              background-color var(--anim-fast) var(--ease-out),
+              box-shadow var(--anim-fast) var(--ease-out);
+  box-shadow: 0 2px 6px rgba(242, 63, 66, 0.3);
+}
+
+.btn-danger:hover {
+  background-color: #DA373C;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(242, 63, 66, 0.45);
+}
+
+.btn-danger:active {
+  transform: scale(0.98) translateY(1px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Icon Buttons */
+.btn-icon {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--anim-fast) var(--ease-out),
+              background-color var(--anim-fast) var(--ease-out),
+              transform var(--anim-fast) var(--ease-out),
+              border-color var(--anim-fast) var(--ease-out);
+}
+
+.btn-icon:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+  border-color: var(--border-subtle);
+  transform: translateY(-1px);
+}
+
+.btn-icon:active {
+  transform: scale(0.95) translateY(1px);
+}
+
+.btn-icon-rotate:hover svg {
+  transform: rotate(25deg);
+  transition: transform var(--anim-normal) var(--ease-spring);
+}
+
+.btn-icon-scale:hover svg {
+  transform: scale(1.12);
+  transition: transform var(--anim-fast) var(--ease-spring);
+}
+
+.btn-icon-forward:hover svg {
+  transform: translateX(2px);
+  transition: transform var(--anim-fast) var(--ease-out);
+}
+
+/* Inputs */
+.app-input {
+  width: 100%;
+  background-color: var(--bg-input); /* #24262B */
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  outline: none;
+  transition: border-color var(--anim-fast) var(--ease-out),
+              background-color var(--anim-fast) var(--ease-out),
+              box-shadow var(--anim-fast) var(--ease-out);
+}
+
+.app-input:focus {
+  border-color: var(--accent-primary);
+  background-color: var(--bg-secondary);
+  box-shadow: 0 0 0 2px rgba(88, 101, 242, 0.25);
+}
+
+.app-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Channels List Items */
+.channel-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm); /* 8px */
+  color: var(--text-muted);
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  user-select: none;
+  position: relative;
+  transition: background-color var(--anim-fast) var(--ease-out),
+              color var(--anim-fast) var(--ease-out),
+              transform var(--anim-fast) var(--ease-out);
+}
+
+.channel-item svg {
+  transition: transform var(--anim-fast) var(--ease-out), color var(--anim-fast) var(--ease-out);
+}
+
+.channel-item:hover {
+  background-color: var(--bg-hover); /* #30323A */
+  color: var(--text-secondary);
+  transform: translateX(2px);
+}
+
+.channel-item:hover svg {
+  transform: translateX(1px);
+  color: var(--text-secondary);
+}
+
+.channel-item-active {
+  background-color: var(--bg-card-hover) !important; /* #2B2D33 */
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+
+.channel-item-active svg {
+  color: var(--accent-primary) !important;
+}
+
+/* Channel view switching transition */
+.channel-content-enter {
+  animation: channelFadeIn var(--anim-normal) var(--ease-out) forwards;
+}
+
+/* Speaking ring around avatar in voice */
+@keyframes speakingPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(35, 165, 89, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(35, 165, 89, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(35, 165, 89, 0);
+  }
+}
+
+.speaking-pulse {
+  animation: speakingPulse 1.6s infinite ease-out;
+  border-color: var(--status-online) !important;
+}
+
+/* Keyframes */
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes popoverEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes channelFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* New message entrance animation */
+@keyframes messageEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.message-item-new {
+  animation: messageEntrance var(--anim-normal) var(--ease-out) forwards;
+}
+
+/* Subtle Shimmer Skeleton */
+@keyframes shimmerWave {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-hover) 50%, var(--bg-secondary) 75%);
+  background-size: 200% 100%;
+  animation: shimmerWave 2s infinite ease-in-out;
+}
+
+/* =========================================================================
+   VIDEO CALL & PARTICIPANT GRID SYSTEM
+   ========================================================================= */
+
+/* Participant tile join animation (Requirement 12) */
+.participant-tile-enter {
+  animation: participantTileEnter 260ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes participantTileEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Participant tile leave animation (Requirement 13) */
+.participant-tile-leave {
+  animation: participantTileLeave 240ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes participantTileLeave {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* Subtle Speaking Ring Indicator (Requirement 14) */
+.video-speaking-active {
+  box-shadow: 0 0 0 2px var(--status-online), 0 0 16px rgba(35, 165, 89, 0.25) !important;
+  border-color: var(--status-online) !important;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.video-tile-base {
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+  position: relative;
+  border-radius: var(--radius-sm);
+  background-color: #0b0c0e;
+  border: 1px solid var(--border-medium);
+  overflow: hidden;
+}
+
+/* Video Control Dock button press & hover animation */
+.video-control-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+.video-control-btn:hover {
+  transform: scale(1.08);
+}
+
+.video-control-btn:active {
+  transform: scale(0.95);
+}
+
+/* Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .speaking-pulse {
+    animation: none !important;
+    box-shadow: 0 0 0 2px var(--status-online) !important;
+  }
+}
+

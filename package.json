@@ -1,0 +1,40 @@
+{
+  "name": "vibe-space",
+  "version": "1.0.0",
+  "description": "Vibe Space - Futuristic Purple Glass Private Real-Time Social Platform",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"SERVER,CLIENT\" -c \"magenta,cyan\" \"npm run server:dev\" \"npm run client:dev\"",
+    "client:dev": "vite",
+    "client:build": "tsc -b && vite build",
+    "server:dev": "tsx watch src/server/server.ts",
+    "server:start": "tsx src/server/server.ts",
+    "build": "npm run client:build",
+    "start": "tsx src/server/server.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.1"
+  }
+}
