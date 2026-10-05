@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types/index.ts';
 import { generateUserKeyPair, exportPublicKey } from '../crypto/e2ee.ts';
-import { storeLocalKeyPair, loadLocalKeyPair, clearVault } from '../crypto/keyVault.ts';
+import { storeLocalKeyPair, loadLocalKeyPair } from '../crypto/keyVault.ts';
 
 interface AuthContextType {
   user: User | null;
@@ -9,8 +9,8 @@ interface AuthContextType {
   keyPair: CryptoKeyPair | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, displayName: string, password: string) => Promise<void>;
-  logout: () => void;
+  register: (username: string, displayName: string, password: string, email?: string) => Promise<void>;
+  logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
 
@@ -26,23 +26,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     async function initAuth() {
       const savedToken = localStorage.getItem('vibe_space_token') || localStorage.getItem('aetheria_token');
-      if (!savedToken) {
-        setIsLoading(false);
-        return;
+      const headers: Record<string, string> = {};
+      if (savedToken) {
+        headers['Authorization'] = `Bearer ${savedToken}`;
       }
 
       try {
         const res = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${savedToken}` }
+          headers,
+          credentials: 'include'
         });
 
         if (!res.ok) {
           throw new Error('Session expired');
         }
 
-        const userData: User = await res.json();
+        const data = await res.json();
+        const userData: User = data.user || data;
         setUser(userData);
-        setToken(savedToken);
+        if (data.token) {
+          localStorage.setItem('vibe_space_token', data.token);
+          setToken(data.token);
+        } else if (savedToken) {
+          setToken(savedToken);
+        }
 
         // Load or generate local crypto keypair
         let localKeys = await loadLocalKeyPair(userData.id);
@@ -52,12 +59,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await storeLocalKeyPair(userData.id, localKeys);
           const pubKeySpki = await exportPublicKey(localKeys.publicKey);
           // Sync with server registry
+          const updateHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (savedToken || data.token) {
+            updateHeaders['Authorization'] = `Bearer ${data.token || savedToken}`;
+          }
           await fetch('/api/auth/update-key', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${savedToken}`
-            },
+            headers: updateHeaders,
+            credentials: 'include',
             body: JSON.stringify({ publicKey: pubKeySpki })
           });
           userData.publicKey = pubKeySpki;
@@ -65,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setKeyPair(localKeys);
       } catch (err) {
-        console.warn('Auth initialization failed:', err);
+        // Unauthenticated or expired session
         localStorage.removeItem('vibe_space_token');
         localStorage.removeItem('aetheria_token');
         setToken(null);
@@ -84,34 +93,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ username, password })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
+        throw new Error(data.message || data.error || 'Login failed');
       }
 
-      localStorage.setItem('vibe_space_token', data.token);
-      setToken(data.token);
-      setUser(data.user);
+      const userData: User = data.user || data;
+      if (data.token) {
+        localStorage.setItem('vibe_space_token', data.token);
+        setToken(data.token);
+      }
+      setUser(userData);
 
       // Restore or generate cryptographic keys
-      let localKeys = await loadLocalKeyPair(data.user.id);
+      let localKeys = await loadLocalKeyPair(userData.id);
       if (!localKeys) {
         localKeys = await generateUserKeyPair();
-        await storeLocalKeyPair(data.user.id, localKeys);
+        await storeLocalKeyPair(userData.id, localKeys);
         const pubKeySpki = await exportPublicKey(localKeys.publicKey);
+        const updateHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (data.token) {
+          updateHeaders['Authorization'] = `Bearer ${data.token}`;
+        }
         await fetch('/api/auth/update-key', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${data.token}`
-          },
+          headers: updateHeaders,
+          credentials: 'include',
           body: JSON.stringify({ publicKey: pubKeySpki })
         });
-        data.user.publicKey = pubKeySpki;
-        setUser({ ...data.user });
+        userData.publicKey = pubKeySpki;
+        setUser({ ...userData });
       }
       setKeyPair(localKeys);
     } finally {
@@ -119,43 +134,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (username: string, displayName: string, password: string) => {
+  const register = async (username: string, displayName: string, password: string, email?: string) => {
     setIsLoading(true);
     try {
       // 1. Generate local cryptographic keypair BEFORE registering
       const newKeyPair = await generateUserKeyPair();
       const publicKeySpki = await exportPublicKey(newKeyPair.publicKey);
 
-      // 2. Transmit public key to server (Private key stays strictly on client!)
+      // 2. Transmit public key to server
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           username,
           displayName,
           password,
+          email: email || undefined,
           publicKey: publicKeySpki
         })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
+        throw new Error(data.message || data.error || 'Registration failed');
+      }
+
+      const userData: User = data.user || data;
+      if (data.token) {
+        localStorage.setItem('vibe_space_token', data.token);
+        setToken(data.token);
       }
 
       // 3. Securely store private key in client-side IndexedDB
-      await storeLocalKeyPair(data.user.id, newKeyPair);
+      await storeLocalKeyPair(userData.id, newKeyPair);
 
-      localStorage.setItem('vibe_space_token', data.token);
-      setToken(data.token);
-      setUser(data.user);
+      setUser(userData);
       setKeyPair(newKeyPair);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+    } catch (e) {
+      console.warn('Logout API call failed:', e);
+    }
     localStorage.removeItem('vibe_space_token');
     localStorage.removeItem('aetheria_token');
     setToken(null);
@@ -164,14 +193,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUser = async () => {
-    if (!token) return;
     try {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const res = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers,
+        credentials: 'include'
       });
       if (res.ok) {
-        const u = await res.json();
-        setUser(u);
+        const data = await res.json();
+        setUser(data.user || data);
       }
     } catch (err) {
       console.error('Failed to refresh user:', err);

@@ -1,12 +1,12 @@
 import express, { Response } from 'express';
 import { randomUUID } from 'node:crypto';
-import { db } from './database.ts';
+import { dbService } from './database.ts';
 import { authMiddleware, AuthRequest } from './auth.ts';
 
 export const apiRouter = express.Router();
 
 // Search users
-apiRouter.get('/users/search', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.get('/users/search', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const q = ((req.query.q as string) || '').trim().toLowerCase();
     if (!q) {
@@ -14,12 +14,7 @@ apiRouter.get('/users/search', authMiddleware, (req: AuthRequest, res: Response)
       return;
     }
 
-    const rows: any[] = db.prepare(`
-      SELECT id, username, display_name, avatar_url, public_key, last_seen
-      FROM users
-      WHERE (username LIKE ? OR display_name LIKE ?) AND id != ?
-      LIMIT 20
-    `).all(`%${q}%`, `%${q}%`, req.userId!);
+    const rows = await dbService.searchUsers(q, req.userId!);
 
     res.json({
       users: rows.map(r => ({
@@ -37,19 +32,19 @@ apiRouter.get('/users/search', authMiddleware, (req: AuthRequest, res: Response)
 });
 
 // Get user public key
-apiRouter.get('/users/:id/key', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.get('/users/:id/key', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const row: any = db.prepare('SELECT id, username, display_name, avatar_url, public_key FROM users WHERE id = ?').get(req.params.id as string);
-    if (!row) {
+    const user = await dbService.findUserById(req.params.id as string);
+    if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
     }
     res.json({
-      id: row.id,
-      username: row.username,
-      displayName: row.display_name,
-      avatarUrl: row.avatar_url,
-      publicKey: row.public_key
+      id: user.id,
+      username: user.username,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+      publicKey: user.public_key
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to fetch public key' });
@@ -57,26 +52,10 @@ apiRouter.get('/users/:id/key', authMiddleware, (req: AuthRequest, res: Response
 });
 
 // List connections
-apiRouter.get('/connections', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.get('/connections', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const currentUserId = req.userId!;
-    const rows: any[] = db.prepare(`
-      SELECT 
-        c.id as connection_id,
-        c.status,
-        c.created_at,
-        c.user_id_1,
-        c.user_id_2,
-        u.id as user_id,
-        u.username,
-        u.display_name,
-        u.avatar_url,
-        u.public_key,
-        u.last_seen
-      FROM connections c
-      JOIN users u ON (u.id = CASE WHEN c.user_id_1 = ? THEN c.user_id_2 ELSE c.user_id_1 END)
-      WHERE c.user_id_1 = ? OR c.user_id_2 = ?
-    `).all(currentUserId, currentUserId, currentUserId);
+    const rows = await dbService.getConnectionsForUser(currentUserId);
 
     res.json({
       connections: rows.map(r => ({
@@ -100,7 +79,7 @@ apiRouter.get('/connections', authMiddleware, (req: AuthRequest, res: Response):
 });
 
 // Send connection request
-apiRouter.post('/connections/request', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.post('/connections/request', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { targetUserId } = req.body;
     const currentUserId = req.userId!;
@@ -110,10 +89,7 @@ apiRouter.post('/connections/request', authMiddleware, (req: AuthRequest, res: R
       return;
     }
 
-    const existing: any = db.prepare(`
-      SELECT id, status FROM connections
-      WHERE (user_id_1 = ? AND user_id_2 = ?) OR (user_id_1 = ? AND user_id_2 = ?)
-    `).get(currentUserId, targetUserId, targetUserId, currentUserId);
+    const existing = await dbService.findConnection(currentUserId, targetUserId);
 
     if (existing) {
       res.status(409).json({ error: `Connection already exists with status: ${existing.status}` });
@@ -121,10 +97,7 @@ apiRouter.post('/connections/request', authMiddleware, (req: AuthRequest, res: R
     }
 
     const id = randomUUID();
-    db.prepare(`
-      INSERT INTO connections (id, user_id_1, user_id_2, status, created_at)
-      VALUES (?, ?, ?, 'PENDING', ?)
-    `).run(id, currentUserId, targetUserId, Date.now());
+    await dbService.createConnection(id, currentUserId, targetUserId, 'PENDING', Date.now());
 
     res.status(201).json({ success: true, connectionId: id });
   } catch (err: any) {
@@ -133,12 +106,12 @@ apiRouter.post('/connections/request', authMiddleware, (req: AuthRequest, res: R
 });
 
 // Respond to connection request
-apiRouter.post('/connections/respond', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.post('/connections/respond', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { connectionId, action } = req.body; // action: 'ACCEPT' | 'REJECT'
     const currentUserId = req.userId!;
 
-    const row: any = db.prepare('SELECT * FROM connections WHERE id = ?').get(connectionId);
+    const row = await dbService.getConnectionById(connectionId);
     if (!row) {
       res.status(404).json({ error: 'Connection request not found' });
       return;
@@ -150,10 +123,10 @@ apiRouter.post('/connections/respond', authMiddleware, (req: AuthRequest, res: R
     }
 
     if (action === 'ACCEPT') {
-      db.prepare("UPDATE connections SET status = 'ACCEPTED' WHERE id = ?").run(connectionId);
+      await dbService.updateConnectionStatus(connectionId, 'ACCEPTED');
       res.json({ success: true, status: 'ACCEPTED' });
     } else {
-      db.prepare('DELETE FROM connections WHERE id = ?').run(connectionId);
+      await dbService.deleteConnection(connectionId);
       res.json({ success: true, status: 'REJECTED' });
     }
   } catch (err: any) {
@@ -162,18 +135,12 @@ apiRouter.post('/connections/respond', authMiddleware, (req: AuthRequest, res: R
 });
 
 // Get encrypted message history with another user
-apiRouter.get('/messages/:otherUserId', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.get('/messages/:otherUserId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const currentUserId = req.userId!;
     const otherUserId = req.params.otherUserId as string;
 
-    const rows: any[] = db.prepare(`
-      SELECT id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at, read_at
-      FROM e2e_messages
-      WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)
-      ORDER BY created_at ASC
-      LIMIT 100
-    `).all(currentUserId, otherUserId, otherUserId, currentUserId);
+    const rows = await dbService.getMessages(currentUserId, otherUserId, 100);
 
     res.json({
       messages: rows.map(r => ({
@@ -193,7 +160,7 @@ apiRouter.get('/messages/:otherUserId', authMiddleware, (req: AuthRequest, res: 
 });
 
 // Save an encrypted message envelope
-apiRouter.post('/messages', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.post('/messages', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const senderId = req.userId!;
     const { recipientId, senderPublicKey, ciphertext, iv } = req.body;
@@ -206,10 +173,15 @@ apiRouter.post('/messages', authMiddleware, (req: AuthRequest, res: Response): v
     const id = randomUUID();
     const now = Date.now();
 
-    db.prepare(`
-      INSERT INTO e2e_messages (id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, senderId, recipientId, senderPublicKey, ciphertext, iv, now);
+    await dbService.createMessage({
+      id,
+      sender_id: senderId,
+      recipient_id: recipientId,
+      sender_public_key: senderPublicKey,
+      ciphertext,
+      iv,
+      created_at: now
+    });
 
     res.status(201).json({
       message: {
@@ -228,7 +200,7 @@ apiRouter.post('/messages', authMiddleware, (req: AuthRequest, res: Response): v
 });
 
 // Watch Room management
-apiRouter.post('/rooms', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.post('/rooms', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const hostId = req.userId!;
     const { title, videoId } = req.body;
@@ -237,10 +209,17 @@ apiRouter.post('/rooms', authMiddleware, (req: AuthRequest, res: Response): void
     const id = randomUUID();
     const now = Date.now();
 
-    db.prepare(`
-      INSERT INTO watch_rooms (id, room_code, title, host_id, video_id, playback_state, current_time_sec, last_synced_at, created_at)
-      VALUES (?, ?, ?, ?, ?, 'PAUSED', 0, ?, ?)
-    `).run(id, roomCode, title || 'Cyber Lounge', hostId, cleanVideoId, now, now);
+    await dbService.createWatchRoom({
+      id,
+      room_code: roomCode,
+      title: title || 'Cyber Lounge',
+      host_id: hostId,
+      video_id: cleanVideoId,
+      playback_state: 'PAUSED',
+      current_time_sec: 0,
+      last_synced_at: now,
+      created_at: now
+    });
 
     res.status(201).json({
       room: {
@@ -259,15 +238,10 @@ apiRouter.post('/rooms', authMiddleware, (req: AuthRequest, res: Response): void
   }
 });
 
-apiRouter.get('/rooms/:code', authMiddleware, (req: AuthRequest, res: Response): void => {
+apiRouter.get('/rooms/:code', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const code = (req.params.code as string).toUpperCase();
-    const row: any = db.prepare(`
-      SELECT r.*, u.username as host_username, u.display_name as host_display_name
-      FROM watch_rooms r
-      JOIN users u ON u.id = r.host_id
-      WHERE r.room_code = ?
-    `).get(code);
+    const row = await dbService.getWatchRoomByCode(code);
 
     if (!row) {
       res.status(404).json({ error: 'Watch room not found' });
