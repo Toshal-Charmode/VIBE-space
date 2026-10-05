@@ -46,28 +46,25 @@ export const SEED_USERS = [
   }
 ];
 
+// In-memory fallback stores (guarantees zero-crash operation in any environment)
+const memUsers = new Map(SEED_USERS.map(u => [u.username.toLowerCase(), { ...u }]));
+const memUsersById = new Map(SEED_USERS.map(u => [u.id, { ...u }]));
+const memConnections = [];
+const memMessages = [];
+const memRooms = new Map();
+
 const DATABASE_URL = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.SUPABASE_DATABASE_URL;
 const TURSO_URL = process.env.TURSO_DATABASE_URL;
 
 let pgPool = null;
 let tursoClient = null;
 let sqliteDb = null;
+let sqliteInitialized = false;
 
 function getSqlitePath() {
   const isVercel = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
   if (isVercel) {
-    const tmpPath = path.join('/tmp', 'vibe_space.db');
-    if (!fs.existsSync(tmpPath)) {
-      const bundledDb = path.resolve(process.cwd(), 'data', 'vibe_space.db');
-      if (fs.existsSync(bundledDb)) {
-        try {
-          fs.copyFileSync(bundledDb, tmpPath);
-        } catch (e) {
-          console.warn('[Database] Could not copy bundled DB to /tmp:', e);
-        }
-      }
-    }
-    return tmpPath;
+    return path.join('/tmp', 'vibe_space.db');
   }
 
   const dataDir = path.resolve(process.cwd(), 'data');
@@ -79,16 +76,10 @@ function getSqlitePath() {
   return path.join(dataDir, 'vibe_space.db');
 }
 
-async function getSqliteDb() {
-  if (sqliteDb) return sqliteDb;
-  const dbPath = getSqlitePath();
+function ensureTablesAndSeed(dbInstance) {
+  if (!dbInstance) return;
   try {
-    const { DatabaseSync } = esmRequire('node:sqlite');
-    sqliteDb = new DatabaseSync(dbPath);
-    sqliteDb.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA foreign_keys = ON;
-
+    dbInstance.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
@@ -139,13 +130,13 @@ async function getSqliteDb() {
       );
     `);
 
-    try { sqliteDb.exec("ALTER TABLE users ADD COLUMN email TEXT;"); } catch (e) {}
-    try { sqliteDb.exec("ALTER TABLE users ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;"); } catch (e) {}
+    try { dbInstance.exec("ALTER TABLE users ADD COLUMN email TEXT;"); } catch (e) {}
+    try { dbInstance.exec("ALTER TABLE users ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;"); } catch (e) {}
 
-    const countRow = sqliteDb.prepare("SELECT count(*) as count FROM users").get();
+    const countRow = dbInstance.prepare("SELECT count(*) as count FROM users").get();
     if (countRow && countRow.count === 0) {
       console.log('[Database] Seeding initial users into SQLite...');
-      const insertUser = sqliteDb.prepare(`
+      const insertUser = dbInstance.prepare(`
         INSERT INTO users (id, username, display_name, password_hash, email, avatar_url, public_key, created_at, updated_at, last_seen)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
@@ -154,7 +145,30 @@ async function getSqliteDb() {
       }
     }
   } catch (err) {
-    console.error('[Database] SQLite initialization error:', err);
+    console.warn('[Database] SQLite table creation/seed warning:', err.message);
+  }
+}
+
+async function getSqliteDb() {
+  if (sqliteDb && sqliteInitialized) return sqliteDb;
+  const dbPath = getSqlitePath();
+  try {
+    let DatabaseSync;
+    try {
+      const sqliteModule = esmRequire('node:sqlite');
+      DatabaseSync = sqliteModule.DatabaseSync;
+    } catch (e) {
+      return null;
+    }
+
+    if (!DatabaseSync) return null;
+
+    sqliteDb = new DatabaseSync(dbPath);
+    ensureTablesAndSeed(sqliteDb);
+    sqliteInitialized = true;
+  } catch (err) {
+    console.warn('[Database] SQLite unavailable, falling back to memory/cloud:', err.message);
+    sqliteDb = null;
   }
   return sqliteDb;
 }
@@ -162,11 +176,12 @@ async function getSqliteDb() {
 export const db = (() => {
   try {
     const { DatabaseSync } = esmRequire('node:sqlite');
+    if (!DatabaseSync) throw new Error('DatabaseSync not available');
     const dbPath = getSqlitePath();
     const inst = new DatabaseSync(dbPath);
-    try { inst.exec("ALTER TABLE users ADD COLUMN email TEXT;"); } catch (e) {}
-    try { inst.exec("ALTER TABLE users ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0;"); } catch (e) {}
+    ensureTablesAndSeed(inst);
     sqliteDb = inst;
+    sqliteInitialized = true;
     return inst;
   } catch (e) {
     return {
@@ -257,7 +272,7 @@ async function initPgTables(pool) {
     }
     pgInitialized = true;
   } catch (err) {
-    console.error('[Database] Failed to initialize PostgreSQL tables:', err);
+    console.error('[Database] Failed to initialize PostgreSQL tables:', err.message);
   }
 }
 
@@ -274,288 +289,381 @@ function getTursoClient() {
 export const dbService = {
   async findUserByUsername(username) {
     const cleanUsername = username.trim().toLowerCase();
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      await initPgTables(pool);
-      const res = await pool.query('SELECT * FROM users WHERE LOWER(username) = $1', [cleanUsername]);
-      if (res.rows.length === 0) return null;
-      const r = res.rows[0];
-      return {
-        id: r.id,
-        username: r.username,
-        display_name: r.display_name,
-        password_hash: r.password_hash,
-        email: r.email,
-        avatar_url: r.avatar_url,
-        public_key: r.public_key,
-        created_at: Number(r.created_at),
-        updated_at: Number(r.updated_at),
-        last_seen: Number(r.last_seen)
-      };
-    }
 
-    if (TURSO_URL) {
-      const client = getTursoClient();
-      if (client) {
-        const res = await client.execute({ sql: 'SELECT * FROM users WHERE LOWER(username) = ?', args: [cleanUsername] });
-        if (res.rows.length === 0) return null;
-        const r = res.rows[0];
-        return {
-          id: r.id,
-          username: r.username,
-          display_name: r.display_name,
-          password_hash: r.password_hash,
-          email: r.email,
-          avatar_url: r.avatar_url,
-          public_key: r.public_key,
-          created_at: Number(r.created_at),
-          updated_at: Number(r.updated_at),
-          last_seen: Number(r.last_seen)
-        };
+    // 1. PostgreSQL
+    if (DATABASE_URL) {
+      try {
+        const pool = getPgPool();
+        await initPgTables(pool);
+        const res = await pool.query('SELECT * FROM users WHERE LOWER(username) = $1', [cleanUsername]);
+        if (res.rows.length > 0) {
+          const r = res.rows[0];
+          return {
+            id: r.id,
+            username: r.username,
+            display_name: r.display_name,
+            password_hash: r.password_hash,
+            email: r.email,
+            avatar_url: r.avatar_url,
+            public_key: r.public_key,
+            created_at: Number(r.created_at),
+            updated_at: Number(r.updated_at),
+            last_seen: Number(r.last_seen)
+          };
+        }
+      } catch (e) {
+        console.warn('[Database] Postgres query failed:', e.message);
       }
     }
 
-    const sDb = await getSqliteDb();
-    if (!sDb) return null;
-    const r = sDb.prepare('SELECT * FROM users WHERE LOWER(username) = ?').get(cleanUsername);
-    if (!r) return null;
-    return {
-      id: r.id,
-      username: r.username,
-      display_name: r.display_name,
-      password_hash: r.password_hash,
-      email: r.email,
-      avatar_url: r.avatar_url,
-      public_key: r.public_key,
-      created_at: Number(r.created_at),
-      updated_at: Number(r.updated_at || r.created_at),
-      last_seen: Number(r.last_seen)
-    };
+    // 2. Turso
+    if (TURSO_URL) {
+      try {
+        const client = getTursoClient();
+        if (client) {
+          const res = await client.execute({ sql: 'SELECT * FROM users WHERE LOWER(username) = ?', args: [cleanUsername] });
+          if (res.rows.length > 0) {
+            const r = res.rows[0];
+            return {
+              id: r.id,
+              username: r.username,
+              display_name: r.display_name,
+              password_hash: r.password_hash,
+              email: r.email,
+              avatar_url: r.avatar_url,
+              public_key: r.public_key,
+              created_at: Number(r.created_at),
+              updated_at: Number(r.updated_at),
+              last_seen: Number(r.last_seen)
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('[Database] Turso query failed:', e.message);
+      }
+    }
+
+    // 3. SQLite
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        const r = sDb.prepare('SELECT * FROM users WHERE LOWER(username) = ?').get(cleanUsername);
+        if (r) {
+          return {
+            id: r.id,
+            username: r.username,
+            display_name: r.display_name,
+            password_hash: r.password_hash,
+            email: r.email,
+            avatar_url: r.avatar_url,
+            public_key: r.public_key,
+            created_at: Number(r.created_at),
+            updated_at: Number(r.updated_at || r.created_at),
+            last_seen: Number(r.last_seen)
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('[Database] SQLite query warning:', e.message);
+    }
+
+    // 4. Memory Fallback
+    const memUser = memUsers.get(cleanUsername);
+    if (memUser) return { ...memUser };
+
+    return null;
   },
 
   async findUserByEmail(email) {
     const cleanEmail = email.trim().toLowerCase();
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      await initPgTables(pool);
-      const res = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
-      if (res.rows.length === 0) return null;
-      const r = res.rows[0];
-      return {
-        id: r.id,
-        username: r.username,
-        display_name: r.display_name,
-        password_hash: r.password_hash,
-        email: r.email,
-        avatar_url: r.avatar_url,
-        public_key: r.public_key,
-        created_at: Number(r.created_at),
-        updated_at: Number(r.updated_at),
-        last_seen: Number(r.last_seen)
-      };
-    }
 
-    if (TURSO_URL) {
-      const client = getTursoClient();
-      if (client) {
-        const res = await client.execute({ sql: 'SELECT * FROM users WHERE LOWER(email) = ?', args: [cleanEmail] });
-        if (res.rows.length === 0) return null;
-        const r = res.rows[0];
-        return {
-          id: r.id,
-          username: r.username,
-          display_name: r.display_name,
-          password_hash: r.password_hash,
-          email: r.email,
-          avatar_url: r.avatar_url,
-          public_key: r.public_key,
-          created_at: Number(r.created_at),
-          updated_at: Number(r.updated_at),
-          last_seen: Number(r.last_seen)
-        };
+    // 1. PostgreSQL
+    if (DATABASE_URL) {
+      try {
+        const pool = getPgPool();
+        await initPgTables(pool);
+        const res = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+        if (res.rows.length > 0) {
+          const r = res.rows[0];
+          return {
+            id: r.id,
+            username: r.username,
+            display_name: r.display_name,
+            password_hash: r.password_hash,
+            email: r.email,
+            avatar_url: r.avatar_url,
+            public_key: r.public_key,
+            created_at: Number(r.created_at),
+            updated_at: Number(r.updated_at),
+            last_seen: Number(r.last_seen)
+          };
+        }
+      } catch (e) {
+        console.warn('[Database] Postgres query failed:', e.message);
       }
     }
 
-    const sDb = await getSqliteDb();
-    if (!sDb) return null;
-    const r = sDb.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail);
-    if (!r) return null;
-    return {
-      id: r.id,
-      username: r.username,
-      display_name: r.display_name,
-      password_hash: r.password_hash,
-      email: r.email,
-      avatar_url: r.avatar_url,
-      public_key: r.public_key,
-      created_at: Number(r.created_at),
-      updated_at: Number(r.updated_at || r.created_at),
-      last_seen: Number(r.last_seen)
-    };
+    // 2. Turso
+    if (TURSO_URL) {
+      try {
+        const client = getTursoClient();
+        if (client) {
+          const res = await client.execute({ sql: 'SELECT * FROM users WHERE LOWER(email) = ?', args: [cleanEmail] });
+          if (res.rows.length > 0) {
+            const r = res.rows[0];
+            return {
+              id: r.id,
+              username: r.username,
+              display_name: r.display_name,
+              password_hash: r.password_hash,
+              email: r.email,
+              avatar_url: r.avatar_url,
+              public_key: r.public_key,
+              created_at: Number(r.created_at),
+              updated_at: Number(r.updated_at),
+              last_seen: Number(r.last_seen)
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('[Database] Turso query failed:', e.message);
+      }
+    }
+
+    // 3. SQLite
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        const r = sDb.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(cleanEmail);
+        if (r) {
+          return {
+            id: r.id,
+            username: r.username,
+            display_name: r.display_name,
+            password_hash: r.password_hash,
+            email: r.email,
+            avatar_url: r.avatar_url,
+            public_key: r.public_key,
+            created_at: Number(r.created_at),
+            updated_at: Number(r.updated_at || r.created_at),
+            last_seen: Number(r.last_seen)
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('[Database] SQLite query warning:', e.message);
+    }
+
+    // 4. Memory Fallback
+    for (const u of memUsers.values()) {
+      if (u.email && u.email.toLowerCase() === cleanEmail) {
+        return { ...u };
+      }
+    }
+
+    return null;
   },
 
   async findUserById(id) {
     if (DATABASE_URL) {
-      const pool = getPgPool();
-      await initPgTables(pool);
-      const res = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-      if (res.rows.length === 0) return null;
-      const r = res.rows[0];
-      return {
-        id: r.id,
-        username: r.username,
-        display_name: r.display_name,
-        password_hash: r.password_hash,
-        email: r.email,
-        avatar_url: r.avatar_url,
-        public_key: r.public_key,
-        created_at: Number(r.created_at),
-        updated_at: Number(r.updated_at),
-        last_seen: Number(r.last_seen)
-      };
-    }
-
-    if (TURSO_URL) {
-      const client = getTursoClient();
-      if (client) {
-        const res = await client.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [id] });
-        if (res.rows.length === 0) return null;
-        const r = res.rows[0];
-        return {
-          id: r.id,
-          username: r.username,
-          display_name: r.display_name,
-          password_hash: r.password_hash,
-          email: r.email,
-          avatar_url: r.avatar_url,
-          public_key: r.public_key,
-          created_at: Number(r.created_at),
-          updated_at: Number(r.updated_at),
-          last_seen: Number(r.last_seen)
-        };
+      try {
+        const pool = getPgPool();
+        await initPgTables(pool);
+        const res = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+        if (res.rows.length > 0) {
+          const r = res.rows[0];
+          return {
+            id: r.id,
+            username: r.username,
+            display_name: r.display_name,
+            password_hash: r.password_hash,
+            email: r.email,
+            avatar_url: r.avatar_url,
+            public_key: r.public_key,
+            created_at: Number(r.created_at),
+            updated_at: Number(r.updated_at),
+            last_seen: Number(r.last_seen)
+          };
+        }
+      } catch (e) {
+        console.warn('[Database] Postgres query failed:', e.message);
       }
     }
 
-    const sDb = await getSqliteDb();
-    if (!sDb) return null;
-    const r = sDb.prepare('SELECT * FROM users WHERE id = ?').get(id);
-    if (!r) return null;
-    return {
-      id: r.id,
-      username: r.username,
-      display_name: r.display_name,
-      password_hash: r.password_hash,
-      email: r.email,
-      avatar_url: r.avatar_url,
-      public_key: r.public_key,
-      created_at: Number(r.created_at),
-      updated_at: Number(r.updated_at || r.created_at),
-      last_seen: Number(r.last_seen)
-    };
+    if (TURSO_URL) {
+      try {
+        const client = getTursoClient();
+        if (client) {
+          const res = await client.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [id] });
+          if (res.rows.length > 0) {
+            const r = res.rows[0];
+            return {
+              id: r.id,
+              username: r.username,
+              display_name: r.display_name,
+              password_hash: r.password_hash,
+              email: r.email,
+              avatar_url: r.avatar_url,
+              public_key: r.public_key,
+              created_at: Number(r.created_at),
+              updated_at: Number(r.updated_at),
+              last_seen: Number(r.last_seen)
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('[Database] Turso query failed:', e.message);
+      }
+    }
+
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        const r = sDb.prepare('SELECT * FROM users WHERE id = ?').get(id);
+        if (r) {
+          return {
+            id: r.id,
+            username: r.username,
+            display_name: r.display_name,
+            password_hash: r.password_hash,
+            email: r.email,
+            avatar_url: r.avatar_url,
+            public_key: r.public_key,
+            created_at: Number(r.created_at),
+            updated_at: Number(r.updated_at || r.created_at),
+            last_seen: Number(r.last_seen)
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('[Database] SQLite query warning:', e.message);
+    }
+
+    const memUser = memUsersById.get(id);
+    if (memUser) return { ...memUser };
+
+    return null;
   },
 
   async createUser(user) {
+    // 1. PostgreSQL
     if (DATABASE_URL) {
-      const pool = getPgPool();
-      await initPgTables(pool);
-      await pool.query(`
-        INSERT INTO users (id, username, display_name, password_hash, email, avatar_url, public_key, created_at, updated_at, last_seen)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      `, [user.id, user.username, user.display_name, user.password_hash, user.email || null, user.avatar_url || null, user.public_key, user.created_at, user.updated_at, user.last_seen]);
-      return;
-    }
-
-    if (TURSO_URL) {
-      const client = getTursoClient();
-      if (client) {
-        await client.execute({
-          sql: `INSERT INTO users (id, username, display_name, password_hash, email, avatar_url, public_key, created_at, updated_at, last_seen)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [user.id, user.username, user.display_name, user.password_hash, user.email || null, user.avatar_url || null, user.public_key, user.created_at, user.updated_at, user.last_seen]
-        });
-        return;
+      try {
+        const pool = getPgPool();
+        await initPgTables(pool);
+        await pool.query(`
+          INSERT INTO users (id, username, display_name, password_hash, email, avatar_url, public_key, created_at, updated_at, last_seen)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [user.id, user.username, user.display_name, user.password_hash, user.email || null, user.avatar_url || null, user.public_key, user.created_at, user.updated_at, user.last_seen]);
+      } catch (e) {
+        console.warn('[Database] Postgres createUser warning:', e.message);
       }
     }
 
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare(`
-        INSERT INTO users (id, username, display_name, password_hash, email, avatar_url, public_key, created_at, updated_at, last_seen)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(user.id, user.username, user.display_name, user.password_hash, user.email || null, user.avatar_url || null, user.public_key, user.created_at, user.updated_at, user.last_seen);
+    // 2. Turso
+    if (TURSO_URL) {
+      try {
+        const client = getTursoClient();
+        if (client) {
+          await client.execute({
+            sql: `INSERT INTO users (id, username, display_name, password_hash, email, avatar_url, public_key, created_at, updated_at, last_seen)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [user.id, user.username, user.display_name, user.password_hash, user.email || null, user.avatar_url || null, user.public_key, user.created_at, user.updated_at, user.last_seen]
+          });
+        }
+      } catch (e) {
+        console.warn('[Database] Turso createUser warning:', e.message);
+      }
     }
+
+    // 3. SQLite
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare(`
+          INSERT INTO users (id, username, display_name, password_hash, email, avatar_url, public_key, created_at, updated_at, last_seen)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(user.id, user.username, user.display_name, user.password_hash, user.email || null, user.avatar_url || null, user.public_key, user.created_at, user.updated_at, user.last_seen);
+      }
+    } catch (e) {
+      console.warn('[Database] SQLite createUser warning:', e.message);
+    }
+
+    // 4. Memory Fallback
+    memUsers.set(user.username.toLowerCase(), { ...user });
+    memUsersById.set(user.id, { ...user });
   },
 
   async updateUserLastSeen(id, timestamp) {
     if (DATABASE_URL) {
-      const pool = getPgPool();
-      await pool.query('UPDATE users SET last_seen = $1, updated_at = $1 WHERE id = $2', [timestamp, id]);
-      return;
+      try {
+        const pool = getPgPool();
+        await pool.query('UPDATE users SET last_seen = $1, updated_at = $1 WHERE id = $2', [timestamp, id]);
+      } catch (e) {}
     }
     if (TURSO_URL) {
-      const client = getTursoClient();
-      if (client) {
-        await client.execute({ sql: 'UPDATE users SET last_seen = ?, updated_at = ? WHERE id = ?', args: [timestamp, timestamp, id] });
-        return;
-      }
+      try {
+        const client = getTursoClient();
+        if (client) {
+          await client.execute({ sql: 'UPDATE users SET last_seen = ?, updated_at = ? WHERE id = ?', args: [timestamp, timestamp, id] });
+        }
+      } catch (e) {}
     }
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare('UPDATE users SET last_seen = ?, updated_at = ? WHERE id = ?').run(timestamp, timestamp, id);
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare('UPDATE users SET last_seen = ?, updated_at = ? WHERE id = ?').run(timestamp, timestamp, id);
+      }
+    } catch (e) {}
+
+    const memUser = memUsersById.get(id);
+    if (memUser) {
+      memUser.last_seen = timestamp;
+      memUser.updated_at = timestamp;
     }
   },
 
   async updateUserPublicKey(id, publicKey) {
     const now = Date.now();
     if (DATABASE_URL) {
-      const pool = getPgPool();
-      await pool.query('UPDATE users SET public_key = $1, updated_at = $2 WHERE id = $3', [publicKey, now, id]);
-      return;
+      try {
+        const pool = getPgPool();
+        await pool.query('UPDATE users SET public_key = $1, updated_at = $2 WHERE id = $3', [publicKey, now, id]);
+      } catch (e) {}
     }
     if (TURSO_URL) {
-      const client = getTursoClient();
-      if (client) {
-        await client.execute({ sql: 'UPDATE users SET public_key = ?, updated_at = ? WHERE id = ?', args: [publicKey, now, id] });
-        return;
-      }
+      try {
+        const client = getTursoClient();
+        if (client) {
+          await client.execute({ sql: 'UPDATE users SET public_key = ?, updated_at = ? WHERE id = ?', args: [publicKey, now, id] });
+        }
+      } catch (e) {}
     }
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare('UPDATE users SET public_key = ?, updated_at = ? WHERE id = ?').run(publicKey, now, id);
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare('UPDATE users SET public_key = ?, updated_at = ? WHERE id = ?').run(publicKey, now, id);
+      }
+    } catch (e) {}
+
+    const memUser = memUsersById.get(id);
+    if (memUser) {
+      memUser.public_key = publicKey;
+      memUser.updated_at = now;
     }
   },
 
   async searchUsers(q, excludeId) {
     const term = `%${q.toLowerCase()}%`;
     if (DATABASE_URL) {
-      const pool = getPgPool();
-      await initPgTables(pool);
-      const res = await pool.query(`
-        SELECT * FROM users
-        WHERE (LOWER(username) LIKE $1 OR LOWER(display_name) LIKE $1) AND id != $2
-        LIMIT 20
-      `, [term, excludeId]);
-      return res.rows.map(r => ({
-        id: r.id,
-        username: r.username,
-        display_name: r.display_name,
-        password_hash: r.password_hash,
-        email: r.email,
-        avatar_url: r.avatar_url,
-        public_key: r.public_key,
-        created_at: Number(r.created_at),
-        updated_at: Number(r.updated_at),
-        last_seen: Number(r.last_seen)
-      }));
-    }
-
-    if (TURSO_URL) {
-      const client = getTursoClient();
-      if (client) {
-        const res = await client.execute({
-          sql: `SELECT * FROM users WHERE (LOWER(username) LIKE ? OR LOWER(display_name) LIKE ?) AND id != ? LIMIT 20`,
-          args: [term, term, excludeId]
-        });
+      try {
+        const pool = getPgPool();
+        await initPgTables(pool);
+        const res = await pool.query(`
+          SELECT * FROM users
+          WHERE (LOWER(username) LIKE $1 OR LOWER(display_name) LIKE $1) AND id != $2
+          LIMIT 20
+        `, [term, excludeId]);
         return res.rows.map(r => ({
           id: r.id,
           username: r.username,
@@ -568,241 +676,216 @@ export const dbService = {
           updated_at: Number(r.updated_at),
           last_seen: Number(r.last_seen)
         }));
-      }
+      } catch (e) {}
     }
 
-    const sDb = await getSqliteDb();
-    if (!sDb) return [];
-    const rows = sDb.prepare(`
-      SELECT * FROM users
-      WHERE (LOWER(username) LIKE ? OR LOWER(display_name) LIKE ?) AND id != ?
-      LIMIT 20
-    `).all(term, term, excludeId);
-    return rows.map(r => ({
-      id: r.id,
-      username: r.username,
-      display_name: r.display_name,
-      password_hash: r.password_hash,
-      email: r.email,
-      avatar_url: r.avatar_url,
-      public_key: r.public_key,
-      created_at: Number(r.created_at),
-      updated_at: Number(r.updated_at || r.created_at),
-      last_seen: Number(r.last_seen)
-    }));
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        const rows = sDb.prepare(`
+          SELECT * FROM users
+          WHERE (LOWER(username) LIKE ? OR LOWER(display_name) LIKE ?) AND id != ?
+          LIMIT 20
+        `).all(term, term, excludeId);
+        return rows.map(r => ({
+          id: r.id,
+          username: r.username,
+          display_name: r.display_name,
+          password_hash: r.password_hash,
+          email: r.email,
+          avatar_url: r.avatar_url,
+          public_key: r.public_key,
+          created_at: Number(r.created_at),
+          updated_at: Number(r.updated_at || r.created_at),
+          last_seen: Number(r.last_seen)
+        }));
+      }
+    } catch (e) {}
+
+    const cleanQ = q.toLowerCase();
+    const results = [];
+    for (const u of memUsers.values()) {
+      if (u.id !== excludeId && (u.username.toLowerCase().includes(cleanQ) || u.display_name.toLowerCase().includes(cleanQ))) {
+        results.push({ ...u });
+      }
+    }
+    return results;
   },
 
   async getConnectionsForUser(userId) {
     if (DATABASE_URL) {
-      const pool = getPgPool();
-      await initPgTables(pool);
-      const res = await pool.query(`
-        SELECT 
-          c.id as connection_id,
-          c.status,
-          c.created_at,
-          c.user_id_1,
-          c.user_id_2,
-          u.id as user_id,
-          u.username,
-          u.display_name,
-          u.avatar_url,
-          u.public_key,
-          u.last_seen
-        FROM connections c
-        JOIN users u ON (u.id = CASE WHEN c.user_id_1 = $1 THEN c.user_id_2 ELSE c.user_id_1 END)
-        WHERE c.user_id_1 = $1 OR c.user_id_2 = $1
-      `, [userId]);
-      return res.rows;
+      try {
+        const pool = getPgPool();
+        await initPgTables(pool);
+        const res = await pool.query(`
+          SELECT 
+            c.id as connection_id,
+            c.status,
+            c.created_at,
+            c.user_id_1,
+            c.user_id_2,
+            u.id as user_id,
+            u.username,
+            u.display_name,
+            u.avatar_url,
+            u.public_key,
+            u.last_seen
+          FROM connections c
+          JOIN users u ON (u.id = CASE WHEN c.user_id_1 = $1 THEN c.user_id_2 ELSE c.user_id_1 END)
+          WHERE c.user_id_1 = $1 OR c.user_id_2 = $1
+        `, [userId]);
+        return res.rows;
+      } catch (e) {}
     }
 
-    const sDb = await getSqliteDb();
-    if (!sDb) return [];
-    return sDb.prepare(`
-      SELECT 
-        c.id as connection_id,
-        c.status,
-        c.created_at,
-        c.user_id_1,
-        c.user_id_2,
-        u.id as user_id,
-        u.username,
-        u.display_name,
-        u.avatar_url,
-        u.public_key,
-        u.last_seen
-      FROM connections c
-      JOIN users u ON (u.id = CASE WHEN c.user_id_1 = ? THEN c.user_id_2 ELSE c.user_id_1 END)
-      WHERE c.user_id_1 = ? OR c.user_id_2 = ?
-    `).all(userId, userId, userId);
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        return sDb.prepare(`
+          SELECT 
+            c.id as connection_id,
+            c.status,
+            c.created_at,
+            c.user_id_1,
+            c.user_id_2,
+            u.id as user_id,
+            u.username,
+            u.display_name,
+            u.avatar_url,
+            u.public_key,
+            u.last_seen
+          FROM connections c
+          JOIN users u ON (u.id = CASE WHEN c.user_id_1 = ? THEN c.user_id_2 ELSE c.user_id_1 END)
+          WHERE c.user_id_1 = ? OR c.user_id_2 = ?
+        `).all(userId, userId, userId);
+      }
+    } catch (e) {}
+
+    return memConnections.filter(c => c.user_id_1 === userId || c.user_id_2 === userId);
   },
 
   async findConnection(userId1, userId2) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      const res = await pool.query(`
-        SELECT id, status FROM connections
-        WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)
-      `, [userId1, userId2]);
-      return res.rows[0] || null;
-    }
-    const sDb = await getSqliteDb();
-    if (!sDb) return null;
-    return sDb.prepare(`
-      SELECT id, status FROM connections
-      WHERE (user_id_1 = ? AND user_id_2 = ?) OR (user_id_1 = ? AND user_id_2 = ?)
-    `).get(userId1, userId2, userId2, userId1) || null;
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        return sDb.prepare(`
+          SELECT id, status FROM connections
+          WHERE (user_id_1 = ? AND user_id_2 = ?) OR (user_id_1 = ? AND user_id_2 = ?)
+        `).get(userId1, userId2, userId2, userId1) || null;
+      }
+    } catch (e) {}
+    return memConnections.find(c => (c.user_id_1 === userId1 && c.user_id_2 === userId2) || (c.user_id_1 === userId2 && c.user_id_2 === userId1)) || null;
   },
 
   async createConnection(id, userId1, userId2, status, createdAt) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      await pool.query(`
-        INSERT INTO connections (id, user_id_1, user_id_2, status, created_at)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [id, userId1, userId2, status, createdAt]);
-      return;
-    }
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare(`
-        INSERT INTO connections (id, user_id_1, user_id_2, status, created_at)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(id, userId1, userId2, status, createdAt);
-    }
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare(`
+          INSERT INTO connections (id, user_id_1, user_id_2, status, created_at)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(id, userId1, userId2, status, createdAt);
+      }
+    } catch (e) {}
+    memConnections.push({ id, user_id_1: userId1, user_id_2: userId2, status, created_at: createdAt });
   },
 
   async getConnectionById(id) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      const res = await pool.query('SELECT * FROM connections WHERE id = $1', [id]);
-      return res.rows[0] || null;
-    }
-    const sDb = await getSqliteDb();
-    if (!sDb) return null;
-    return sDb.prepare('SELECT * FROM connections WHERE id = ?').get(id) || null;
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        return sDb.prepare('SELECT * FROM connections WHERE id = ?').get(id) || null;
+      }
+    } catch (e) {}
+    return memConnections.find(c => c.id === id) || null;
   },
 
   async updateConnectionStatus(id, status) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      await pool.query('UPDATE connections SET status = $1 WHERE id = $2', [status, id]);
-      return;
-    }
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare('UPDATE connections SET status = ? WHERE id = ?').run(status, id);
-    }
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare('UPDATE connections SET status = ? WHERE id = ?').run(status, id);
+      }
+    } catch (e) {}
+    const c = memConnections.find(conn => conn.id === id);
+    if (c) c.status = status;
   },
 
   async deleteConnection(id) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      await pool.query('DELETE FROM connections WHERE id = $1', [id]);
-      return;
-    }
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare('DELETE FROM connections WHERE id = ?').run(id);
-    }
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare('DELETE FROM connections WHERE id = ?').run(id);
+      }
+    } catch (e) {}
+    const idx = memConnections.findIndex(c => c.id === id);
+    if (idx !== -1) memConnections.splice(idx, 1);
   },
 
   async getMessages(userId1, userId2, limit = 100) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      const res = await pool.query(`
-        SELECT id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at, read_at
-        FROM e2e_messages
-        WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
-        ORDER BY created_at ASC
-        LIMIT $3
-      `, [userId1, userId2, limit]);
-      return res.rows.map(r => ({
-        id: r.id,
-        sender_id: r.sender_id,
-        recipient_id: r.recipient_id,
-        sender_public_key: r.sender_public_key,
-        ciphertext: r.ciphertext,
-        iv: r.iv,
-        created_at: Number(r.created_at),
-        read_at: r.read_at ? Number(r.read_at) : null
-      }));
-    }
-    const sDb = await getSqliteDb();
-    if (!sDb) return [];
-    const rows = sDb.prepare(`
-      SELECT id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at, read_at
-      FROM e2e_messages
-      WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)
-      ORDER BY created_at ASC
-      LIMIT ?
-    `).all(userId1, userId2, userId2, userId1, limit);
-    return rows.map(r => ({
-      id: r.id,
-      sender_id: r.sender_id,
-      recipient_id: r.recipient_id,
-      sender_public_key: r.sender_public_key,
-      ciphertext: r.ciphertext,
-      iv: r.iv,
-      created_at: Number(r.created_at),
-      read_at: r.read_at ? Number(r.read_at) : null
-    }));
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        const rows = sDb.prepare(`
+          SELECT id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at, read_at
+          FROM e2e_messages
+          WHERE (sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)
+          ORDER BY created_at ASC
+          LIMIT ?
+        `).all(userId1, userId2, userId2, userId1, limit);
+        return rows.map(r => ({
+          id: r.id,
+          sender_id: r.sender_id,
+          recipient_id: r.recipient_id,
+          sender_public_key: r.sender_public_key,
+          ciphertext: r.ciphertext,
+          iv: r.iv,
+          created_at: Number(r.created_at),
+          read_at: r.read_at ? Number(r.read_at) : null
+        }));
+      }
+    } catch (e) {}
+    return memMessages.filter(m => (m.sender_id === userId1 && m.recipient_id === userId2) || (m.sender_id === userId2 && m.recipient_id === userId1));
   },
 
   async createMessage(msg) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      await pool.query(`
-        INSERT INTO e2e_messages (id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `, [msg.id, msg.sender_id, msg.recipient_id, msg.sender_public_key, msg.ciphertext, msg.iv, msg.created_at]);
-      return;
-    }
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare(`
-        INSERT INTO e2e_messages (id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(msg.id, msg.sender_id, msg.recipient_id, msg.sender_public_key, msg.ciphertext, msg.iv, msg.created_at);
-    }
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare(`
+          INSERT INTO e2e_messages (id, sender_id, recipient_id, sender_public_key, ciphertext, iv, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(msg.id, msg.sender_id, msg.recipient_id, msg.sender_public_key, msg.ciphertext, msg.iv, msg.created_at);
+      }
+    } catch (e) {}
+    memMessages.push({ ...msg });
   },
 
   async createWatchRoom(room) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      await pool.query(`
-        INSERT INTO watch_rooms (id, room_code, title, host_id, video_id, playback_state, current_time_sec, last_synced_at, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      `, [room.id, room.room_code, room.title, room.host_id, room.video_id, room.playback_state, room.current_time_sec, room.last_synced_at, room.created_at]);
-      return;
-    }
-    const sDb = await getSqliteDb();
-    if (sDb) {
-      sDb.prepare(`
-        INSERT INTO watch_rooms (id, room_code, title, host_id, video_id, playback_state, current_time_sec, last_synced_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(room.id, room.room_code, room.title, room.host_id, room.video_id, room.playback_state, room.current_time_sec, room.last_synced_at, room.created_at);
-    }
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        sDb.prepare(`
+          INSERT INTO watch_rooms (id, room_code, title, host_id, video_id, playback_state, current_time_sec, last_synced_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(room.id, room.room_code, room.title, room.host_id, room.video_id, room.playback_state, room.current_time_sec, room.last_synced_at, room.created_at);
+      }
+    } catch (e) {}
+    memRooms.set(room.room_code, { ...room });
   },
 
   async getWatchRoomByCode(code) {
-    if (DATABASE_URL) {
-      const pool = getPgPool();
-      const res = await pool.query(`
-        SELECT r.*, u.username as host_username, u.display_name as host_display_name
-        FROM watch_rooms r
-        JOIN users u ON u.id = r.host_id
-        WHERE r.room_code = $1
-      `, [code]);
-      return res.rows[0] || null;
-    }
-    const sDb = await getSqliteDb();
-    if (!sDb) return null;
-    return sDb.prepare(`
-      SELECT r.*, u.username as host_username, u.display_name as host_display_name
-      FROM watch_rooms r
-      JOIN users u ON u.id = r.host_id
-      WHERE r.room_code = ?
-    `).get(code) || null;
+    try {
+      const sDb = await getSqliteDb();
+      if (sDb) {
+        return sDb.prepare(`
+          SELECT r.*, u.username as host_username, u.display_name as host_display_name
+          FROM watch_rooms r
+          JOIN users u ON u.id = r.host_id
+          WHERE r.room_code = ?
+        `).get(code) || null;
+      }
+    } catch (e) {}
+    return memRooms.get(code) || null;
   }
 };

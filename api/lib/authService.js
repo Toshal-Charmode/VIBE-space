@@ -381,54 +381,99 @@ export async function updatePublicKey(token, publicKey) {
 }
 
 export async function handleRegister(req, res) {
-  setCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    setCorsHeaders(req, res);
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-  const result = await registerUser(body);
-  if (result.cookie) res.setHeader('Set-Cookie', result.cookie);
-  return res.status(result.status).json(result.data);
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const result = await registerUser(body);
+    if (result.cookie) res.setHeader('Set-Cookie', result.cookie);
+    return res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('[Vercel handleRegister Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Registration failed',
+      message: err.message || 'Registration failed'
+    });
+  }
 }
 
 export async function handleLogin(req, res) {
-  setCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    setCorsHeaders(req, res);
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-  const result = await loginUser(body);
-  if (result.cookie) res.setHeader('Set-Cookie', result.cookie);
-  return res.status(result.status).json(result.data);
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const result = await loginUser(body);
+    if (result.cookie) res.setHeader('Set-Cookie', result.cookie);
+    return res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('[Vercel handleLogin Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Login failed',
+      message: err.message || 'Login failed'
+    });
+  }
 }
 
 export async function handleMe(req, res) {
-  setCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    setCorsHeaders(req, res);
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const token = extractToken(req);
-  const result = await getMe(token);
-  return res.status(result.status).json(result.data);
+    const token = extractToken(req);
+    const result = await getMe(token);
+    return res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('[Vercel handleMe Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Authentication check failed',
+      message: err.message || 'Authentication check failed'
+    });
+  }
 }
 
 export async function handleLogout(req, res) {
-  setCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    setCorsHeaders(req, res);
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const result = logoutUser();
-  if (result.cookie) res.setHeader('Set-Cookie', result.cookie);
-  return res.status(result.status).json(result.data);
+    const result = logoutUser();
+    if (result.cookie) res.setHeader('Set-Cookie', result.cookie);
+    return res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('[Vercel handleLogout Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Logout failed',
+      message: err.message || 'Logout failed'
+    });
+  }
 }
 
 export async function handleUpdateKey(req, res) {
-  setCorsHeaders(req, res);
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  try {
+    setCorsHeaders(req, res);
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const token = extractToken(req);
-  const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-  const result = await updatePublicKey(token, body.publicKey);
-  return res.status(result.status).json(result.data);
+    const token = extractToken(req);
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+    const result = await updatePublicKey(token, body.publicKey);
+    return res.status(result.status).json(result.data);
+  } catch (err) {
+    console.error('[Vercel handleUpdateKey Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Key update failed',
+      message: err.message || 'Key update failed'
+    });
+  }
 }
