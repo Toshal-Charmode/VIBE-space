@@ -23,7 +23,7 @@ setupSocketIO(io);
 const DIST_PATH = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(DIST_PATH)) {
   app.use(express.static(DIST_PATH));
-  app.get('*', (req, res) => {
+  app.get('*', (req: any, res: any) => {
     if (!req.path.startsWith('/api') && !req.path.startsWith('/socket.io')) {
       res.sendFile(path.join(DIST_PATH, 'index.html'));
     }
